@@ -82,18 +82,13 @@ public class ServiceRequests {
             Map<String, Object> ret = requestAuth(phone, password);
             Map<String, Object> data = (Map<String, Object>) ret.get("data");
             if (Objects.isNull(data)) {
-                log.warn("init auth failed, data not found. phone={} passwor={}, ret={}", phone, password, ret);
-                throw new InitAuthException("init auth faild");
+                log.warn("init auth failed, data not found. phone={} password={}, ret={}", phone, password, ret);
+                throw new InitAuthException("init auth failed");
             }
-            Map<String, Object> user = (Map<String, Object>) ret.get("user");
-            if (Objects.isNull(user)) {
-                log.warn("init auth failed, user not found. phone={} passwor={}, ret={}", phone, password, ret);
-                throw new InitAuthException("init auth faild");
-            }
-            String token = (String) ret.get("token");
+            String token = (String) data.get("jwtToken");
             if (Objects.isNull(token)) {
-                log.warn("init auth failed, token not found. phone={} passwor={}, ret={}", phone, password, ret);
-                throw new InitAuthException("init auth faild");
+                log.warn("init auth failed, token not found. phone={} password={}, ret={}", phone, password, ret);
+                throw new InitAuthException("init auth failed");
             }
             this.token = token;
             if (Objects.nonNull(outerStorageCallback)) {
