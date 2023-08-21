@@ -18,7 +18,9 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.apache.logging.log4j.LogManager;
@@ -66,6 +68,7 @@ public class ServiceRequests {
                 .setSocketTimeout(1000)
                 .setConnectTimeout(5000)
                 .build();
+        this.client = HttpClientBuilder.create().build();
     }
 
     public ServiceRequests(@NotNull Config config, String name, RequestConfig requestConfig) {
@@ -146,7 +149,7 @@ public class ServiceRequests {
         param.put("endDateTime", endDateTime);
         param.put("startPage", startPage);
         param.put("pageSize", pageSize);
-        return postRequest(PATH_HISTORY_WARNING, param);
+        return getRequest(PATH_HISTORY_WARNING, param);
     }
 
     /**
@@ -164,7 +167,7 @@ public class ServiceRequests {
         param.put("startPage", startPage);
         param.put("name", name);
         param.put("deviceId", deviceId);
-        return postRequest(PATH_DEVICE_INFO, param);
+        return getRequest(PATH_DEVICE_INFO, param);
     }
 
     /**
@@ -175,29 +178,75 @@ public class ServiceRequests {
     public Map<String, Object> requestVideoStream(@NotNull final String uid) {
         Map<String, String> param = new HashMap<>(1);
         param.put("uid", uid);
-        return postRequest(PATH_VIDEO_STREAM, param);
+        return getRequest(PATH_VIDEO_STREAM, param);
     }
 
-    private String combPath(final String path) {
-        return config.getHost() + ":" + config.getPort() + config.getUrlPrefix() + path;
+    private String combPath(final String path, Map<String, String> p) {
+        StringBuilder queryParam = new StringBuilder();
+        if (Objects.nonNull(p)) {
+            queryParam.append("?");
+            p.forEach((k, v) -> {
+                queryParam.append("&")
+                        .append(k)
+                        .append("=")
+                        .append(v);
+            });
+        }
+        return config.getHost() + ":" + config.getPort() + config.getUrlPrefix() + path + queryParam;
     }
 
     private Map<String, Object> handleJsonResponse(final String content) {
         Objects.requireNonNull(content);
         JSONObject json = JSONObject.parseObject(content);
-        if (json.containsKey("code") && json.getString("code").equals("0")) {
-            return json.getJSONObject("data").getInnerMap();
+        if (json.containsKey("code") && json.getString("code").equals("200")) {
+            return json.getInnerMap();
         } else {
             log.info(json.getString("msg"));
             throw new RuntimeException(json.getString("msg"));
         }
     }
 
+    private Map<String, Object> getRequest(String path, Map<String, String> p) {
+        HttpResponse response = null;
+        try {
+            String url = combPath(path, p);
+            HttpGet get = new HttpGet(url);
+            get.setConfig(this.requestConfig);
+            get.setHeader(HttpHeaders.CONTENT_TYPE, "application/x-www-form-urlencoded");
+            if (Objects.nonNull(this.token)) {
+                get.setHeader(HttpHeaders.AUTHORIZATION, this.token);
+            }
+
+            if (log.isDebugEnabled()) {
+                log.debug("get request path=[{}], headers=[{}]", get.getURI().toString(), get.getAllHeaders());
+            }
+
+            response = client.execute(get);
+            String respContent = readInputStream(response.getEntity().getContent(),
+                    Objects.isNull(response.getEntity().getContentEncoding()) ? config.getCharset() : response.getEntity().getContentEncoding().getValue());
+            if (log.isDebugEnabled()) {
+                log.debug("path=[{}], params=[{}], response status=[{}] content=[{}]", path, p,
+                        response.getStatusLine().getStatusCode(), respContent);
+            }
+            return handleJsonResponse(respContent);
+        } catch (Exception e) {
+            log.info("path=[{}], params=[{}] error.", path, p, e);
+            throw new RuntimeException(e);
+        } finally {
+            try {
+                if (Objects.nonNull(response)) {
+                    EntityUtils.consume(response.getEntity());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 
     private Map<String, Object> postRequest(String path, Map<String, String> p) {
         HttpResponse response = null;
         try {
-            String url = combPath(path);
+            String url = combPath(path, null);
             final HttpEntity body = combBody(p);
             HttpPost post = new HttpPost(url);
             post.setConfig(this.requestConfig);

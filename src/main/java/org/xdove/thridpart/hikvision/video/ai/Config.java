@@ -24,7 +24,7 @@ public class Config {
         defaultConfig();
     }
     private void defaultConfig() {
-        this.urlPrefix = "/artemis";
+        this.urlPrefix = "";
     }
 
 }

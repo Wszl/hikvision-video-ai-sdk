@@ -1,12 +1,22 @@
 package org.xdove.thridpart.hikvision.video.ai;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.Charset;
 import java.util.Map;
+import java.util.Objects;
 
 public class ServiceRequestsTest {
 
     private ServiceRequests requests;
+    private String token;
 
     @Before
     public void setUp() throws Exception {
@@ -16,6 +26,25 @@ public class ServiceRequestsTest {
                 System.getenv("phone"),
                 System.getenv("password"));
         requests = new ServiceRequests(config);
+        this.token = System.getenv("jwt");
+        this.requests.setToken(this.token);
+    }
+
+    public static void main(String[] args) throws IOException {
+        startHttpServer();
+    }
+
+    public static void startHttpServer() throws IOException {
+        HttpServer httpServer = HttpServer.create(new InetSocketAddress(18080), 10);
+        httpServer.createContext("/callback", new HttpHandler() {
+            @Override
+            public void handle(HttpExchange exchange) throws IOException {
+                String body = IOUtils.toString(exchange.getRequestBody(), Charset.defaultCharset());
+                String url = exchange.getRequestURI().toString();
+                System.out.printf("%s \t %s \n", url, body);
+            }
+        });
+        httpServer.start();
     }
 
     @Test
